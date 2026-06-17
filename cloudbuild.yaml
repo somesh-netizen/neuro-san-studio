@@ -1,0 +1,36 @@
+# Cloud Build pipeline for neuro-san-studio.
+# On every push to the connected branch, Cloud Build will:
+#   1. Build the container image using deploy/Dockerfile (context = repo root).
+#   2. Tag it with the commit SHA (traceable) and with "latest".
+#   3. Push both tags to Artifact Registry.
+# Nothing is built or pushed from a local machine.
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: build
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/neurosan/neuro-san-studio:$SHORT_SHA
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/neurosan/neuro-san-studio:latest
+      # The Dockerfile lives in deploy/, but the build context is the repo root
+      # because it COPYs ./neuro_san_studio, ./registries, ./config, etc.
+      - -f
+      - deploy/Dockerfile
+      - .
+
+# Telling Cloud Build which images to push to Artifact Registry after the build.
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/neurosan/neuro-san-studio:$SHORT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/neurosan/neuro-san-studio:latest
+
+substitutions:
+  _REGION: us-west2
+
+# The dependency install (langchain, etc.) can take a while, so give it headroom.
+timeout: 1800s
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
