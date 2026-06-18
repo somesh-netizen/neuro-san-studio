@@ -1,0 +1,56 @@
+# Deployment for neuro-san-studio (all-in-one image: agent server + nsflow UI).
+# The image's entrypoint (deploy/entrypoint-studio.sh) starts the agent server on
+# :8080 (internal) and the nsflow UI on :4173 (the port we expose via the Service).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: neuro-san-studio
+  labels:
+    app: neuro-san-studio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: neuro-san-studio
+  template:
+    metadata:
+      labels:
+        app: neuro-san-studio
+    spec:
+      containers:
+        - name: neuro-san-studio
+          # Pin to a specific commit SHA in production; :latest is fine for testing.
+          image: us-west2-docker.pkg.dev/cog01ktstga42atq8m9n2k7tkp006/neurosan/neuro-san-studio-ui:latest
+          ports:
+            - name: ui            # nsflow web UI (public)
+              containerPort: 4173
+            - name: agent         # neuro-san agent server (internal)
+              containerPort: 8080
+          # BYO-key: every key stored in this Secret becomes an env var inside the
+          # container (e.g. ANTHROPIC_API_KEY, OPENAI_API_KEY). The customer creates
+          # this Secret with whichever provider key(s) they have.
+          envFrom:
+            - secretRef:
+                name: neuro-san-llm-keys
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+          # UI is ready once nsflow is accepting connections on 4173.
+          readinessProbe:
+            tcpSocket:
+              port: 4173
+            initialDelaySeconds: 25
+            periodSeconds: 10
+            failureThreshold: 12
+          # Liveness checks the agent server's health endpoint on 8080.
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 45
+            periodSeconds: 20
+            failureThreshold: 6

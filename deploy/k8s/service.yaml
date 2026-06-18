@@ -1,0 +1,20 @@
+# Service that exposes the nsflow UI. type: LoadBalancer gives an external IP so you
+# can open the UI in a browser. Traffic on port 80 forwards to nsflow on 4173.
+#
+# NOTE: this exposes the UI publicly with no auth — fine for a test/demo. For a real
+# Marketplace deployment you'd front it with Identity-Aware Proxy (IAP) or an
+# authenticated Ingress instead of a raw public LoadBalancer.
+apiVersion: v1
+kind: Service
+metadata:
+  name: neuro-san-studio
+  labels:
+    app: neuro-san-studio
+spec:
+  type: LoadBalancer
+  selector:
+    app: neuro-san-studio
+  ports:
+    - name: http
+      port: 80
+      targetPort: 4173

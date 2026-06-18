@@ -1,0 +1,28 @@
+# All-in-one image: neuro-san agent server + nsflow web UI in one container.
+#
+# This builds FROM the server image produced by deploy/Dockerfile, which already
+# contains nsflow and every dependency. We only change how the container STARTS
+# (launch the UI + server together) and which port it exposes. Building on top of
+# the server image means upstream Dockerfile changes flow through automatically and
+# we never duplicate that 450-line file.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+# Add the combined-startup script (needs root to write into the app directory).
+USER root
+COPY ./deploy/entrypoint-studio.sh /usr/local/neuro-san/myapp/deploy/entrypoint-studio.sh
+RUN chmod +x /usr/local/neuro-san/myapp/deploy/entrypoint-studio.sh \
+    && chown neuro-san: /usr/local/neuro-san/myapp/deploy/entrypoint-studio.sh
+
+# nsflow (the UI) is the public-facing port; the agent server stays internal on 8080.
+EXPOSE 4173
+ENV NSFLOW_HOST=0.0.0.0
+ENV NSFLOW_PORT=4173
+ENV NEURO_SAN_SERVER_HOST=localhost
+ENV NEURO_SAN_SERVER_HTTP_PORT=8080
+
+# Run as the same non-root app user as the server image.
+USER neuro-san
+WORKDIR /usr/local/neuro-san/myapp
+
+ENTRYPOINT ["/bin/bash", "-c", "exec /usr/local/neuro-san/myapp/deploy/entrypoint-studio.sh"]

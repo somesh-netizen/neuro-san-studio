@@ -1,35 +1,52 @@
 # Cloud Build pipeline for neuro-san-studio.
-# On every push to the connected branch, Cloud Build will:
-#   1. Build the container image using deploy/Dockerfile (context = repo root).
-#   2. Tag it with the commit SHA (traceable) and with "latest".
-#   3. Push both tags to Artifact Registry.
+# On every push to the connected branch, Cloud Build builds two images and pushes
+# both to Artifact Registry, each tagged with the commit SHA (traceable) and "latest":
+#   1. neuro-san-studio      -> the agent SERVER only (port 8080)
+#   2. neuro-san-studio-ui   -> all-in-one: server + nsflow web UI (the deployable product)
 # Nothing is built or pushed from a local machine.
 
 steps:
+  # 1. Build the agent server image (context = repo root; Dockerfile lives in deploy/).
   - name: gcr.io/cloud-builders/docker
-    id: build
+    id: build-server
     args:
       - build
       - -t
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/neurosan/neuro-san-studio:$SHORT_SHA
       - -t
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/neurosan/neuro-san-studio:latest
-      # The Dockerfile lives in deploy/, but the build context is the repo root
-      # because it COPYs ./neuro_san_studio, ./registries, ./config, etc.
       - -f
       - deploy/Dockerfile
       - .
 
-# Telling Cloud Build which images to push to Artifact Registry after the build.
+  # 2. Build the all-in-one UI image FROM the server image just built above.
+  #    The server image is present locally in this build, so FROM resolves to it.
+  - name: gcr.io/cloud-builders/docker
+    id: build-studio-ui
+    args:
+      - build
+      - --build-arg
+      - BASE_IMAGE=${_REGION}-docker.pkg.dev/$PROJECT_ID/neurosan/neuro-san-studio:$SHORT_SHA
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/neurosan/neuro-san-studio-ui:$SHORT_SHA
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/neurosan/neuro-san-studio-ui:latest
+      - -f
+      - deploy/Dockerfile.studio
+      - .
+
+# Push all four tags to Artifact Registry.
 images:
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/neurosan/neuro-san-studio:$SHORT_SHA
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/neurosan/neuro-san-studio:latest
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/neurosan/neuro-san-studio-ui:$SHORT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/neurosan/neuro-san-studio-ui:latest
 
 substitutions:
   _REGION: us-west2
 
-# The dependency install (langchain, etc.) can take a while, so give it headroom.
-timeout: 1800s
+# Dependency install is heavy; the second image is a thin layer on top, so 40 min is ample.
+timeout: 2400s
 
 options:
   logging: CLOUD_LOGGING_ONLY
