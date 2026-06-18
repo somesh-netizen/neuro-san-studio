@@ -11,8 +11,10 @@ FROM ${BASE_IMAGE}
 # Add the combined-startup script (needs root to write into the app directory).
 USER root
 COPY ./deploy/entrypoint-studio.sh /usr/local/neuro-san/myapp/deploy/entrypoint-studio.sh
+# The studio runner (`ns run`) writes to logs/ and thinking_dir/ inside the app dir,
+# so the non-root app user must own it. (The base image's COPYs left these root-owned.)
 RUN chmod +x /usr/local/neuro-san/myapp/deploy/entrypoint-studio.sh \
-    && chown neuro-san: /usr/local/neuro-san/myapp/deploy/entrypoint-studio.sh
+    && chown -R neuro-san: /usr/local/neuro-san/myapp
 
 # nsflow (the UI) is the public-facing port; the agent server stays internal on 8080.
 EXPOSE 4173
