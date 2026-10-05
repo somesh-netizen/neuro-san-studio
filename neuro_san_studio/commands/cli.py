@@ -37,6 +37,13 @@ class NeuroSanStudioCli:  # pylint: disable=too-few-public-methods
         add_completion=False,
     )
 
+    _new_app = typer.Typer(
+        name="new",
+        help="Scaffold a new network or tool inside the current project.",
+        no_args_is_help=True,
+    )
+    app.add_typer(_new_app)
+
     @staticmethod
     def _version_callback(value: bool) -> bool:
         """Print the neuro-san-studio version (and where it resolved from) and exit."""
@@ -295,6 +302,51 @@ class NeuroSanStudioCli:  # pylint: disable=too-few-public-methods
         )
 
     @staticmethod
+    @app.command(
+        "test",
+        help="Run tests for the current project (unit tests by default).",
+        context_settings={
+            "allow_extra_args": True,
+            "ignore_unknown_options": True,
+        },
+    )
+    def _test_command(
+        ctx: typer.Context,
+        *,
+        path: Optional[str] = typer.Argument(
+            None,
+            help="Path to a test file or directory to scope the run. Defaults to tests/.",
+        ),
+        integration: bool = typer.Option(
+            False,
+            "--integration",
+            help="Run integration tests instead of unit tests (requires API keys).",
+        ),
+        verbose: bool = typer.Option(
+            False,
+            "--verbose",
+            help="Run pytest in verbose mode.",
+        ),
+    ) -> None:
+        """Run pytest with the project's environment applied.
+
+        Unit tests (default) run without API keys.  Pass ``--integration`` to run
+        fixture-based integration tests, which require API keys and a running server.
+        Any extra arguments after ``--`` are forwarded verbatim to pytest.
+        """
+        # pylint: disable-next=import-outside-toplevel
+        from neuro_san_studio.commands.test import TestCommand
+
+        raise typer.Exit(
+            code=TestCommand(
+                path=path,
+                integration=integration,
+                verbose=verbose,
+                extra_args=list(ctx.args),
+            ).run()
+        )
+
+    @staticmethod
     @app.command("validate", help="Validate the structure of an agent network HOCON file.")
     def _validate_command(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         hocon_path: str = typer.Argument(
@@ -393,6 +445,28 @@ class NeuroSanStudioCli:  # pylint: disable=too-few-public-methods
                 search_paths=search_paths,
             ).run()
         )
+
+    @staticmethod
+    @_new_app.command("network", help="Scaffold a new agent network HOCON file and register it in the manifest.")
+    def _new_network_command(
+        name: str = typer.Argument(..., help="Snake-case network name, e.g. my_network."),
+    ) -> None:
+        """Create registries/<name>.hocon, add it to the manifest, and write a sample fixture."""
+        # pylint: disable-next=import-outside-toplevel
+        from neuro_san_studio.commands.new_network import NewNetworkCommand
+
+        raise typer.Exit(code=NewNetworkCommand(name=name).run())
+
+    @staticmethod
+    @_new_app.command("tool", help="Scaffold a new CodedTool subclass and a unit test.")
+    def _new_tool_command(
+        name: str = typer.Argument(..., help="Snake-case tool name, e.g. my_tool."),
+    ) -> None:
+        """Create coded_tools/<name>/<name>.py and tests/neuro_san_studio/coded_tools/test_<name>.py."""
+        # pylint: disable-next=import-outside-toplevel
+        from neuro_san_studio.commands.new_tool import NewToolCommand
+
+        raise typer.Exit(code=NewToolCommand(name=name).run())
 
 
 def main() -> None:
